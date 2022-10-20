@@ -1,5 +1,5 @@
 <template>
-  <PageWrapper title="关于">
+  <PageWrapper title="关于1">
     <template #headerContent>
       <div class="flex justify-between items-center">
         <span class="flex-1">

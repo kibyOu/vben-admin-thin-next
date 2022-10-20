@@ -146,6 +146,7 @@ export interface GlobConfig {
   urlPrefix?: string;
   // Project abbreviation
   shortName: string;
+  baseURL: string;
 }
 export interface GlobEnvConfig {
   // Site title

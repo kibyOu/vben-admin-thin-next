@@ -5,9 +5,10 @@ import { ErrorMessageMode } from '/#/axios';
 
 enum Api {
   Login = '/login',
-  Logout = '/logout',
-  GetUserInfo = '/getUserInfo',
+  Logout = '/oauth/logout',
+  GetUserInfo = '/iam/tcl/v1/users/self',
   GetPermCode = '/getPermCode',
+  GetSelfRoles = '/iam/tcl/v1/member-roles/self-roles',
 }
 
 /**
@@ -29,7 +30,10 @@ export function loginApi(params: LoginParams, mode: ErrorMessageMode = 'modal') 
  * @description: getUserInfo
  */
 export function getUserInfo() {
-  return defHttp.get<GetUserInfoModel>({ url: Api.GetUserInfo }, { errorMessageMode: 'none' });
+  return defHttp.get<GetUserInfoModel>(
+    { url: Api.GetUserInfo },
+    { isTransformResponse: false, errorMessageMode: 'none' },
+  );
 }
 
 export function getPermCode() {
@@ -37,5 +41,15 @@ export function getPermCode() {
 }
 
 export function doLogout() {
-  return defHttp.get({ url: Api.Logout });
+  return defHttp.post(
+    { url: Api.Logout },
+    { isTransformResponse: false, errorMessageMode: 'none' },
+  );
+}
+
+export function getSelfRoles() {
+  return defHttp.get<any>(
+    { url: Api.GetSelfRoles },
+    { isTransformResponse: false, errorMessageMode: 'none' },
+  );
 }

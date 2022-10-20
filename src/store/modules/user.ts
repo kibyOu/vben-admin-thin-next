@@ -4,23 +4,27 @@ import { defineStore } from 'pinia';
 import { store } from '/@/store';
 import { RoleEnum } from '/@/enums/roleEnum';
 import { PageEnum } from '/@/enums/pageEnum';
-import { ROLES_KEY, TOKEN_KEY, USER_INFO_KEY } from '/@/enums/cacheEnum';
+import { ROLES_KEY, TOKEN_KEY, USER_INFO_KEY, ORIGANIZATIONID_KEY } from '/@/enums/cacheEnum';
 import { getAuthCache, setAuthCache } from '/@/utils/auth';
 import { GetUserInfoModel, LoginParams } from '/@/api/sys/model/userModel';
-import { doLogout, getUserInfo, loginApi } from '/@/api/sys/user';
+import { getUserInfo, loginApi } from '/@/api/sys/user';
 import { useI18n } from '/@/hooks/web/useI18n';
 import { useMessage } from '/@/hooks/web/useMessage';
 import { router } from '/@/router';
+import { baseURL, clientId } from '/@/config';
 import { usePermissionStore } from '/@/store/modules/permission';
 import { RouteRecordRaw } from 'vue-router';
 import { PAGE_NOT_FOUND_ROUTE } from '/@/router/routes/basic';
 import { isArray } from '/@/utils/is';
+import { getSelfRoles } from '/@/api/sys/user';
 import { h } from 'vue';
 
 interface UserState {
   userInfo: Nullable<UserInfo>;
   token?: string;
   roleList: RoleEnum[];
+  createBy: number[];
+  organizationId?: string;
   sessionTimeout?: boolean;
   lastUpdateTime: number;
 }
@@ -34,10 +38,14 @@ export const useUserStore = defineStore({
     token: undefined,
     // roleList
     roleList: [],
+    //createBy
+    createBy: [],
     // Whether the login expired
     sessionTimeout: false,
     // Last fetch time
     lastUpdateTime: 0,
+    // organizationId
+    organizationId: '18',
   }),
   getters: {
     getUserInfo(): UserInfo {
@@ -49,11 +57,17 @@ export const useUserStore = defineStore({
     getRoleList(): RoleEnum[] {
       return this.roleList.length > 0 ? this.roleList : getAuthCache<RoleEnum[]>(ROLES_KEY);
     },
+    getCreateBy(): number {
+      return Math.min(...this.createBy);
+    },
     getSessionTimeout(): boolean {
       return !!this.sessionTimeout;
     },
     getLastUpdateTime(): number {
       return this.lastUpdateTime;
+    },
+    getOrganizationId(): string {
+      return this.organizationId || '0';
     },
   },
   actions: {
@@ -73,11 +87,16 @@ export const useUserStore = defineStore({
     setSessionTimeout(flag: boolean) {
       this.sessionTimeout = flag;
     },
+    setOrganizationId(organizationId: string | undefined) {
+      this.organizationId = organizationId;
+      setAuthCache(ORIGANIZATIONID_KEY, organizationId);
+    },
     resetState() {
       this.userInfo = null;
       this.token = '';
       this.roleList = [];
       this.sessionTimeout = false;
+      this.organizationId = '';
     },
     /**
      * @description: login
@@ -91,10 +110,11 @@ export const useUserStore = defineStore({
       try {
         const { goHome = true, mode, ...loginParams } = params;
         const data = await loginApi(loginParams, mode);
-        const { token } = data;
+        const { token, organizationId } = data;
 
         // save token
         this.setToken(token);
+        this.setOrganizationId(organizationId);
         return this.afterLoginAction(goHome);
       } catch (error) {
         return Promise.reject(error);
@@ -104,7 +124,6 @@ export const useUserStore = defineStore({
       if (!this.getToken) return null;
       // get user info
       const userInfo = await this.getUserInfoAction();
-
       const sessionTimeout = this.sessionTimeout;
       if (sessionTimeout) {
         this.setSessionTimeout(false);
@@ -125,6 +144,20 @@ export const useUserStore = defineStore({
     async getUserInfoAction(): Promise<UserInfo | null> {
       if (!this.getToken) return null;
       const userInfo = await getUserInfo();
+      const res = await getSelfRoles();
+      if (res && res.length) {
+        res.forEach((element) => {
+          if (element.code === 'txyx_user_zongbu') {
+            this.createBy.push(0);
+          } else if (element.code === 'txyx_user_daqu') {
+            this.createBy.push(1);
+          } else if (element.code === 'txyx_user_zhanqu') {
+            this.createBy.push(2);
+          } else {
+            this.createBy.push(10);
+          }
+        });
+      }
       const { roles = [] } = userInfo;
       if (isArray(roles)) {
         const roleList = roles.map((item) => item.value) as RoleEnum[];
@@ -142,15 +175,19 @@ export const useUserStore = defineStore({
     async logout(goLogin = false) {
       if (this.getToken) {
         try {
-          await doLogout();
+          this.setToken(undefined);
+          this.setSessionTimeout(false);
+          this.setUserInfo(null);
+          const redirecturi = `${window.location.protocol}//${window.location.host}`;
+          window.location.href = `${baseURL}/oauth/logout?response_type=token&client_id=${clientId}&redirect_uri=${redirecturi}`;
         } catch {
           console.log('注销Token失败');
         }
       }
-      this.setToken(undefined);
-      this.setSessionTimeout(false);
-      this.setUserInfo(null);
-      goLogin && router.push(PageEnum.BASE_LOGIN);
+      console.log('logout', goLogin);
+      // goLogin && router.push(PageEnum.BASE_LOGIN);
+      // refresh
+      goLogin && router.push(PageEnum.BASE_HOME);
     },
 
     /**
@@ -168,6 +205,26 @@ export const useUserStore = defineStore({
         },
       });
     },
+
+    /**
+     * @description: Confirm before logging out
+     */
+    // async getUserPower() {
+    //   const res = await getSelfRoles();
+    //   if (res && res.length) {
+    //     res.forEach((element) => {
+    //       if (element.code === 'txyx_user_zongbu') {
+    //         this.createBy.push(0);
+    //       } else if (element.code === 'txyx_user_daqu') {
+    //         this.createBy.push(1);
+    //       } else if (element.code === 'txyx_user_zhanqu') {
+    //         this.createBy.push(2);
+    //       } else {
+    //         this.createBy.push(10);
+    //       }
+    //     });
+    //   }
+    // },
   },
 });
 

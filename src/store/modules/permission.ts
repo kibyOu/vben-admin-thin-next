@@ -1,4 +1,5 @@
 import type { AppRouteRecordRaw, Menu } from '/@/router/types';
+import { cloneDeep } from 'lodash-es';
 
 import { defineStore } from 'pinia';
 import { store } from '/@/store';
@@ -23,6 +24,7 @@ import { getPermCode } from '/@/api/sys/user';
 
 import { useMessage } from '/@/hooks/web/useMessage';
 import { PageEnum } from '/@/enums/pageEnum';
+import { menuLabel } from '/@/config';
 
 interface PermissionState {
   // Permission code list
@@ -97,6 +99,7 @@ export const usePermissionStore = defineStore({
       this.setPermCodeList(codeList);
     },
     async buildRoutesAction(): Promise<AppRouteRecordRaw[]> {
+      debugger;
       const { t } = useI18n();
       const userStore = useUserStore();
       const appStore = useAppStoreWithOut();
@@ -148,6 +151,69 @@ export const usePermissionStore = defineStore({
         return;
       };
 
+      /**
+       * 去除根目录菜单树
+       * @param routes
+       * @returns 返回去除根目录后菜单路由数组
+       */
+      const filterRootNode = (routes: AppRouteRecordRaw[]) => {
+        if (routes.length && routes[0]['rootNode']) {
+          return routes[0].subMenus;
+        }
+      };
+
+      /**
+       * 菜单数据处理
+       * @param routes 接口返回原始数组
+       * @returns 处理完成的符合框架的路由数组
+       */
+      const transformRes = (routes: AppRouteRecordRaw[]) => {
+        // if (!routes || routes.length === 0) return;
+        const cloneRoutes = cloneDeep(routes) || [];
+        const routesList: AppRouteRecordRaw[] = [];
+
+        cloneRoutes.forEach((item: AppRouteRecordRaw) => {
+          if (item.type && item.type === 'root') {
+            item.component = 'LAYOUT';
+          } else if (item.type && item.type === 'dir') {
+            item.component = 'LAYOUT';
+          } else if (item.type && item.type === 'menu') {
+            // item.component = item.route;
+            item.component = `${item.route}/index.vue`;
+          } else if (item.type && item.type === 'inner-link') {
+            item.component = 'IFRAME';
+          }
+          if (item.subMenus) {
+            item.children = transformRes(item.subMenus);
+          }
+          item.path = item.route || '';
+          item.meta = {
+            title: item.name,
+            hideMenu: item.virtualFlag === 1,
+          };
+          if (item.viewCode == 'tour_task.personal_sign_detail') {
+            item.meta.dynamicLevel = 1;
+            item.meta.realPath = item.path;
+          }
+          if (item.type && item.type === 'inner-link') {
+            item.path = item.name;
+            item.meta.frameSrc = item.route;
+          }
+          // item.name = (item.code || '').replace(/(^|\.)(\w)/g, (m, $1, $2) => $2.toUpperCase());
+          item.name = (item.code || '').split('.').slice(-1)[0];
+          item.name = item.name.replace(/(^\w)|_(\w)/g, (_, $1, $2) => ($1 || $2).toUpperCase());
+          const routeItem: AppRouteRecordRaw = {
+            name: item.name,
+            path: item.path,
+            component: item.component,
+            meta: item.meta,
+            children: item.children,
+            viewCode: '',
+          };
+          routesList.push(routeItem);
+        });
+        return cloneDeep(routesList);
+      };
       switch (permissionMode) {
         case PermissionModeEnum.ROLE:
           routes = filter(asyncRoutes, routeFilter);
@@ -183,16 +249,22 @@ export const usePermissionStore = defineStore({
           // !Simulate to obtain permission codes from the background,
           // this function may only need to be executed once, and the actual project can be put at the right time by itself
           let routeList: AppRouteRecordRaw[] = [];
+          debugger;
           try {
-            this.changePermissionCode();
-            routeList = (await getMenuList()) as AppRouteRecordRaw[];
+            // this.changePermissionCode();
+            const data = (await getMenuList({
+              labels: menuLabel,
+              includeUI: true,
+              tenantRoleMerge: true,
+            })) as AppRouteRecordRaw[];
+            const filterData = filterRootNode(data) || [];
+            routeList = transformRes(filterData) as AppRouteRecordRaw[];
           } catch (error) {
             console.error(error);
           }
-
           // Dynamically introduce components
           routeList = transformObjToRoute(routeList);
-
+          console.log('routeList', routeList);
           //  Background routing to menu structure
           const backMenuList = transformRouteToMenu(routeList);
           this.setBackMenuList(backMenuList);
@@ -203,6 +275,8 @@ export const usePermissionStore = defineStore({
 
           routeList = flatMultiLevelRoutes(routeList);
           routes = [PAGE_NOT_FOUND_ROUTE, ...routeList];
+          console.log('routes', routes);
+
           break;
       }
 

@@ -10,15 +10,19 @@ import { PAGE_NOT_FOUND_ROUTE } from '/@/router/routes/basic';
 import { RootRoute } from '/@/router/routes';
 
 const LOGIN_PATH = PageEnum.BASE_LOGIN;
+const BASE_CALLBACK = PageEnum.BASE_CALLBACK;
 
 const ROOT_PATH = RootRoute.path;
 
-const whitePathList: PageEnum[] = [LOGIN_PATH];
+const whitePathList: PageEnum[] = [LOGIN_PATH, BASE_CALLBACK];
 
 export function createPermissionGuard(router: Router) {
   const userStore = useUserStoreWithOut();
   const permissionStore = usePermissionStoreWithOut();
   router.beforeEach(async (to, from, next) => {
+    if (to.path.startsWith('/access_token')) {
+      next();
+    }
     if (
       from.path === ROOT_PATH &&
       to.path === PageEnum.BASE_HOME &&
@@ -94,7 +98,7 @@ export function createPermissionGuard(router: Router) {
       next();
       return;
     }
-
+    debugger;
     const routes = await permissionStore.buildRoutesAction();
 
     routes.forEach((route) => {

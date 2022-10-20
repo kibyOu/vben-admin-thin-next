@@ -5,6 +5,7 @@ export const LOCALE_KEY = 'LOCALE__';
 
 // user info key
 export const USER_INFO_KEY = 'USER__INFO__';
+export const ORIGANIZATIONID_KEY = 'ORIGANIZATIONID_';
 
 // role info key
 export const ROLES_KEY = 'ROLES__KEY__';
